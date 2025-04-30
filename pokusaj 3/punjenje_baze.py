@@ -23,10 +23,10 @@ class State(Base):
 class Disaster(Base):
     __tablename__ = 'Disaster'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    disaster_number = Column(Integer, unique=True, nullable=False)
     incident_type = Column(String, nullable=False)
     incident_begin_date = Column(Date, nullable=False)
     incident_end_date = Column(Date, nullable=False)
+    incident_duration = Column(Integer, nullable=False)
     ih_program_declared = Column(Boolean, nullable=False)
     ia_program_declared = Column(Boolean, nullable=False)
     pa_program_declared = Column(Boolean, nullable=False)
@@ -65,12 +65,11 @@ def load_csv_to_db(csv_path):
     session.commit()
 
     # Punjenje tablice Disaster
-    disasters = df.select("disaster_number", "incident_type", "incident_begin_date", "incident_end_date", "ih_program_declared", "ia_program_declared", "pa_program_declared", "hm_program_declared", "deaths").distinct().collect()
+    disasters = df.select("incident_type", "incident_begin_date", "incident_end_date", "incident_duration","ih_program_declared", "ia_program_declared", "pa_program_declared", "hm_program_declared", "deaths").distinct().collect()
     for row in disasters:
-        existing_disaster = session.query(Disaster).filter_by(disaster_number=row.disaster_number).first()
+        existing_disaster = session.query(Disaster).filter_by(incident_type=row.incident_type).first()
         if not existing_disaster:
             disaster = Disaster(
-                disaster_number=row.disaster_number,
                 incident_type=row.incident_type,
                 incident_begin_date=row.incident_begin_date,
                 incident_end_date=row.incident_end_date,
@@ -84,9 +83,9 @@ def load_csv_to_db(csv_path):
     session.commit()
 
     # Punjenje tablice Declaration
-    declarations = df.select("declaration_title", "declaration_type", "declaration_date", "designated_area", "declaration_request_number", "disaster_number").distinct().collect()
+    declarations = df.select("declaration_title", "declaration_type", "declaration_date", "designated_area", "declaration_request_number").distinct().collect()
     for row in declarations:
-        disaster = session.query(Disaster).filter_by(disaster_number=row.disaster_number).first()
+        disaster = session.query(Disaster).filter_by(declaration_title=row.declaration_title).first()
         if disaster:
             declaration = Declaration(
                 declaration_title=row.declaration_title,

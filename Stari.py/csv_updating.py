@@ -10,7 +10,7 @@ df = pd.read_csv(CSV_FILE_PATH, delimiter=',', dtype={'fips': str})
 print("CSV size before: ", df.shape)
 
 # Izbacivanje nepotrebnih stupaca
-df = df.drop(columns=['disaster_closeout_date', 'last_ia_filing_date', 'hash', 'id', 'fema_declaration_string', 'fy_declared', 'place_code', 'last_refresh']) 
+df = df.drop(columns=['disaster_closeout_date', 'last_ia_filing_date', 'hash', 'id', 'fema_declaration_string', 'fy_declared', 'place_code', 'last_refresh', 'disaster_number']) 
 
 # Izbacivanje redova sa NULL vrijednosti po pogledu na određeni stupac
 df = df.dropna(subset=['incident_end_date'])
@@ -23,6 +23,12 @@ deaths = np.random.randint(0, 10000, size=len(df))
 
 # Dodaj novi stupac 'deaths' u DataFrame
 df['deaths'] = deaths
+
+# Generiraj random podatke za stupac 'incident_duration'
+incident_duration = np.random.randint(1, 24, size=len(df))
+
+# Dodaj novi stupac 'incident_duration' u DataFrame
+df['incident_duration'] = incident_duration
 
 # Izmjena formata datuma
 df['incident_begin_date'] = pd.to_datetime(df['incident_begin_date'], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce').dt.strftime('%Y-%m-%d')
