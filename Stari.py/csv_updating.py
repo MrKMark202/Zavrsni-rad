@@ -10,7 +10,7 @@ df = pd.read_csv(CSV_FILE_PATH, delimiter=',', dtype={'fips': str})
 print("CSV size before: ", df.shape)
 
 # Izbacivanje nepotrebnih stupaca
-df = df.drop(columns=['disaster_closeout_date', 'last_ia_filing_date', 'hash', 'id', 'fema_declaration_string', 'fy_declared', 'place_code', 'last_refresh', 'disaster_number']) 
+df = df.drop(columns=['disaster_closeout_date', 'last_ia_filing_date', 'hash', 'id', 'fema_declaration_string', 'fy_declared', 'place_code', 'last_refresh']) 
 
 # Izbacivanje redova sa NULL vrijednosti po pogledu na određeni stupac
 df = df.dropna(subset=['incident_end_date'])

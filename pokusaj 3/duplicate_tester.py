@@ -1,3 +1,34 @@
+import pandas as pd
+
+# Učitaj podatke
+df = pd.read_csv("data/DisasterDeclarationsSummaries.csv")
+df_denials = pd.read_csv("data/DeclarationDenials.csv")
+
+# Normalizacija naziva stupaca
+df.columns = [col.strip().lower() for col in df.columns]
+df_denials.columns = [col.strip().lower() for col in df_denials.columns]
+
+# Pretvori u integer (sigurno)
+df['declaration_request_number'] = pd.to_numeric(df['declaration_request_number'], errors='coerce').fillna(0).astype(int)
+df_denials['declarationrequestnumber'] = pd.to_numeric(df_denials['declarationrequestnumber'], errors='coerce').fillna(0).astype(int)
+
+# Broj pojavljivanja
+df_counts = df['declaration_request_number'].value_counts()
+denial_counts = df_denials['declarationrequestnumber'].value_counts()
+
+# Nađi zajedničke brojeve
+common_numbers = df_counts.index.intersection(denial_counts.index)
+
+# Ispiši ih
+print(f"\nNadeno zajednickih brojeva: {len(common_numbers)}\n")
+for number in common_numbers:
+    print(f"Broj: {number} | U df: {df_counts[number]} puta | U denials: {denial_counts[number]} puta")
+
+
+
+
+
+
 from collections import Counter
 
 fips_to_name = {

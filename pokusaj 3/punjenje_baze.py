@@ -23,6 +23,7 @@ class State(Base):
 class Disaster(Base):
     __tablename__ = 'Disaster'
     id = Column(Integer, primary_key=True, autoincrement=True)
+    disaster_number = Column(Integer, nullable=False)
     incident_type = Column(String, nullable=False)
     incident_begin_date = Column(Date, nullable=False)
     incident_end_date = Column(Date, nullable=False)
@@ -39,9 +40,9 @@ class Declaration(Base):
     declaration_title = Column(String, nullable=False)
     declaration_type = Column(String, nullable=False)
     declaration_date = Column(Date, nullable=False)
-    designated_area = Column(String, nullable=False)
     declaration_request_number = Column(Integer, nullable=False)
     disaster_fk = Column(Integer, ForeignKey('Disaster.id'), nullable=False)
+    state_fk = Column(Integer, ForeignKey('State.id'), nullable=False)
 
 class DisasteredStates(Base):
     __tablename__ = 'Disastered_states'
@@ -65,14 +66,16 @@ def load_csv_to_db(csv_path):
     session.commit()
 
     # Punjenje tablice Disaster
-    disasters = df.select("incident_type", "incident_begin_date", "incident_end_date", "incident_duration","ih_program_declared", "ia_program_declared", "pa_program_declared", "hm_program_declared", "deaths").distinct().collect()
+    disasters = df.select("disaster_number", "incident_type", "incident_begin_date", "incident_end_date", "incident_duration","ih_program_declared", "ia_program_declared", "pa_program_declared", "hm_program_declared", "deaths").distinct().collect()
     for row in disasters:
-        existing_disaster = session.query(Disaster).filter_by(incident_type=row.incident_type).first()
+        existing_disaster = session.query(Disaster).filter_by(disaster_number=row.disaster_number).first()
         if not existing_disaster:
             disaster = Disaster(
+                disaster_number=row.disaster_number,
                 incident_type=row.incident_type,
                 incident_begin_date=row.incident_begin_date,
                 incident_end_date=row.incident_end_date,
+                incident_duration=row.incident_duration,
                 ih_program_declared=row.ih_program_declared,
                 ia_program_declared=row.ia_program_declared,
                 pa_program_declared=row.pa_program_declared,
@@ -83,17 +86,18 @@ def load_csv_to_db(csv_path):
     session.commit()
 
     # Punjenje tablice Declaration
-    declarations = df.select("declaration_title", "declaration_type", "declaration_date", "designated_area", "declaration_request_number").distinct().collect()
+    declarations = df.select("declaration_title", "declaration_type", "declaration_date", "declaration_request_number", "country_name", "incident_type").distinct().collect()
     for row in declarations:
-        disaster = session.query(Disaster).filter_by(declaration_title=row.declaration_title).first()
+        disaster = session.query(Disaster).filter_by(incident_type=row.incident_type).first()
+        state = session.query(State).filter_by(country_name=row.country_name).first()
         if disaster:
             declaration = Declaration(
                 declaration_title=row.declaration_title,
                 declaration_type=row.declaration_type,
                 declaration_date=row.declaration_date,
-                designated_area=row.designated_area,
                 declaration_request_number=row.declaration_request_number,
-                disaster_fk=disaster.id
+                disaster_fk=disaster.id,
+                state_fk=state.id
             )
             session.add(declaration)
     session.commit()
