@@ -24,11 +24,25 @@ deaths = np.random.randint(0, 10000, size=len(df))
 # Dodaj novi stupac 'deaths' u DataFrame
 df['deaths'] = deaths
 
-# Generiraj random podatke za stupac 'incident_duration'
-incident_duration = np.random.randint(1, 24, size=len(df))
+# pretpostavka: df već sadrži string-datume incident_begin_date, incident_end_date
+df["incident_begin_date"] = pd.to_datetime(df["incident_begin_date"])
+df["incident_end_date"]   = pd.to_datetime(df["incident_end_date"])
 
-# Dodaj novi stupac 'incident_duration' u DataFrame
-df['incident_duration'] = incident_duration
+# 1) razlika u danima (end - begin)
+days_diff = (df["incident_end_date"] - df["incident_begin_date"]).dt.days
+
+# 2) incident_duration:
+#    • ako je razlika 0 → random 1-24 sati
+#    • inače razlika × 24
+df["incident_duration"] = np.where(
+    days_diff == 0,
+    np.random.randint(1, 25, size=len(df)),   # gornja granica u randint je exclusive → 25
+    days_diff * 24
+)
+
+# provjera
+print(df[["incident_begin_date", "incident_end_date", "incident_duration"]].head())
+
 
 # Izmjena formata datuma
 df['incident_begin_date'] = pd.to_datetime(df['incident_begin_date'], format='%Y-%m-%dT%H:%M:%SZ', errors='coerce').dt.strftime('%Y-%m-%d')

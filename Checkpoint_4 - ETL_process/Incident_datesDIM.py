@@ -1,15 +1,13 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
-"""incident_dates_dim.py
+"""
+incident_dates_dim.py   –  county-level DW dimenzija
 
-Generira i sprema dimenzijsku tablicu **Incident_datesDIM** u PostgreSQL‑u.
 • Prirodni ključ: (incident_begin_date, incident_end_date)
-• Surrogate ključ: incident_dates_tk (deterministički, kronološki)
-• Dodaje red "UNKNOWN" (tk = 0) za sigurni LEFT JOIN u FACT‑u.
-
-Fix: korištenje `datetime.utcnow()` prilikom stvaranja UNKNOWN retka –
-`createDataFrame()` ne prihvaća Spark `Column` objekte.
+• Atribut: incident_duration  [int, sati]
+• Surrogate: incident_dates_tk
+• UNKNOWN red (tk = 0, trajanje = 0)
 """
 
 from datetime import datetime
@@ -20,12 +18,13 @@ from pyspark.sql.functions import (
     row_number,
     current_timestamp,
     to_date,
+    datediff,      
+    coalesce      
 )
 
-###############################################################################
-# Spark helper                                                                 #
-###############################################################################
-
+# ------------------------------------------------------------------ #
+#  Spark helper                                                      #
+# ------------------------------------------------------------------ #
 def get_spark_session() -> SparkSession:
     return (
         SparkSession.builder.appName("US_DISASTER_SCHEMA")
@@ -33,10 +32,9 @@ def get_spark_session() -> SparkSession:
         .getOrCreate()
     )
 
-###############################################################################
-# Transform Incident_datesDIM                                                  #
-###############################################################################
-
+# ------------------------------------------------------------------ #
+#  Transform                                                         #
+# ------------------------------------------------------------------ #
 def transform_incident_dates_dim(
     spark: SparkSession,
     jdbc_cfg: dict,
@@ -44,33 +42,44 @@ def transform_incident_dates_dim(
 ):
     """Vrati Incident_datesDIM DataFrame spreman za DW load."""
 
-    # ---- Extract ---------------------------------------------------------
+    # -------- Extract iz baze --------------------------------------
     db_dates = (
-        spark.read.jdbc(
-            jdbc_cfg["url"], '"Disaster"', properties=jdbc_cfg["properties"]
-        )
+        spark.read.jdbc(jdbc_cfg["url"], '"Disaster"',
+                        properties=jdbc_cfg["properties"])
         .select(
             to_date(col("incident_begin_date")).alias("incident_begin_date"),
             to_date(col("incident_end_date")).alias("incident_end_date"),
+            col("incident_duration").cast("int")
         )
     )
 
+    # -------- Extract iz CSV-a -------------------------------------
     csv_dates = (
         spark.read.csv(csv_path, header=True, inferSchema=True)
         .select(
             to_date(col("incident_begin_date")).alias("incident_begin_date"),
             to_date(col("incident_end_date")).alias("incident_end_date"),
+            col("incident_duration").cast("int")
         )
     )
 
-    # ---- Union & deduplicate --------------------------------------------
+    # -------- Union & deduplicate ----------------------------------
     all_dates = (
         db_dates.unionByName(csv_dates)
         .dropna(subset=["incident_begin_date", "incident_end_date"])
+        .withColumn(
+            "incident_duration",
+            # ako je NULL, izračunaj (datediff * 24)  – fallback
+            coalesce(
+                col("incident_duration"),
+                datediff(col("incident_end_date"),
+                         col("incident_begin_date")) * 24
+            ).cast("int")
+        )
         .dropDuplicates(["incident_begin_date", "incident_end_date"])
     )
 
-    # ---- Surrogate key ---------------------------------------------------
+    # -------- Surrogate key & SCD ----------------------------------
     w = Window.orderBy("incident_begin_date", "incident_end_date")
     dim_dates = (
         all_dates.withColumn("incident_dates_tk", row_number().over(w))
@@ -78,34 +87,31 @@ def transform_incident_dates_dim(
         .withColumn("date_from", current_timestamp())
         .withColumn("date_to", lit(None).cast("timestamp"))
         .select(
-            "incident_dates_tk",
-            "version",
-            "date_from",
-            "date_to",
-            "incident_begin_date",
-            "incident_end_date",
+            "incident_dates_tk", "version", "date_from", "date_to",
+            "incident_begin_date", "incident_end_date", "incident_duration"
         )
     )
 
-    # ---- UNKNOWN row -----------------------------------------------------
+    # -------- UNKNOWN row ------------------------------------------
     unknown_row = (
-        0,                    # incident_dates_tk
-        1,                    # version
-        datetime.utcnow(),    # date_from (Python datetime, acceptable)
-        None,                 # date_to
-        None,                 # incident_begin_date
-        None,                 # incident_end_date
+        0,                # incident_dates_tk
+        1,                # version
+        datetime.utcnow(),
+        None,             # date_to
+        None,             # begin
+        None,             # end
+        0                 # incident_duration
     )
-
     unknown_df = spark.createDataFrame([unknown_row], dim_dates.schema)
+
     final_df = unknown_df.unionByName(dim_dates)
 
     print("INCIDENT_DATES_DIM redaka:", final_df.count())
     return final_df
 
-###############################################################################
-# Main entry                                                                   #
-###############################################################################
+# ------------------------------------------------------------------ #
+#  Main                                                              #
+# ------------------------------------------------------------------ #
 if __name__ == "__main__":
     spark = get_spark_session()
 
@@ -123,7 +129,8 @@ if __name__ == "__main__":
     dates_dim_df = transform_incident_dates_dim(spark, JDBC, CSV_20)
 
     dates_dim_df.write.jdbc(
-        JDBC["url"], "incident_datesdim", mode="overwrite", properties=JDBC["properties"]
+        JDBC["url"], "incident_datesdim",
+        mode="overwrite", properties=JDBC["properties"]
     )
 
     print("Dimenzijska tablica 'Incident_datesDIM' uspješno spremljena.")
